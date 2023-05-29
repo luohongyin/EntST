@@ -1,3 +1,4 @@
+from curses import meta
 import enum
 import sys
 import csv
@@ -9,7 +10,7 @@ import pandas as pd
 
 import torch
 
-from synthesis import synthesis_func
+# from synthesis import synthesis_func
 
 domain_dict = {
     'sst2': 'SST-2',
@@ -138,7 +139,9 @@ def coordinate(domain, mlm=True):
         cord_list = [x[prefix_len:] for x in cord_list]
     return cord_list, [1, 1, 0, 0, 1, 1, 0, 0]
 
-def build_prompt_input(domain, sent1_list, sent2_list, mlm=True):
+def build_prompt_input(domain, sent1_list, sent2_list, mlm=True, sep=False):
+
+    '''{sent1_1} [SEP] {sent_2}.'''
 
     def prompt_1(domain, sent1, sent2):
         if domain == 'sst2':
@@ -147,7 +150,7 @@ def build_prompt_input(domain, sent1_list, sent2_list, mlm=True):
         elif domain == 'qnli':
             return f'It is [MASK] that the answer to {sent1} is entailed by {sent2}.'
         elif domain == 'qqp':
-            return f'It is [MASK] that the answer to {sent1} is entailed by {sent2}.'
+            return f'It is [MASK] that the answer to {sent1} is entailed by the answer to {sent2}.'
         elif domain == 'rte':
             return f'It is [MASK] that {sent1} is entailed by {sent2}.'
         elif domain == 'mnli':
@@ -161,7 +164,7 @@ def build_prompt_input(domain, sent1_list, sent2_list, mlm=True):
     def prompt_2(domain, sent1, sent2):
         if domain == 'sst2':
             # return f'It is [MASK] that the movie is good cannot be entailed by {sent1}.'
-            return f'It is [MASK] that I like the movie cannot be entailed by the comment {sent1}.'
+            return f'It is [MASK] that the movie is bad is entailed by the comment {sent1}.'
         elif domain == 'qnli':
             return f'It is [MASK] that {sent1} cannot be answered by {sent2}.'
         elif domain == 'qqp':
@@ -170,8 +173,45 @@ def build_prompt_input(domain, sent1_list, sent2_list, mlm=True):
             return f'It is [MASK] that {sent1} cannot be true when {sent2} is true.'
         elif domain == 'mnli':
             return f'It is [MASK] that {sent1} cannot be true when {sent2} is true.'
+            # return f'It is [MASK] that the answer to a question about {sent1} is not entailed by {sent2}.'
         elif domain == 'cola':
             return f'It is [MASK] that the grammar of {sent1} cannot be accept.'
+        else:
+            print(f'\nDomain {domain} is not supported in build_prompt_input()\n')
+            sys.exit()
+        
+    def prompt_3(domain, sent1, sent2):
+        if domain == 'sst2':
+            # return f'It is [MASK] that I like the movie is true when {sent1}.'
+            return f'It is [MASK] that the movie is good[SEP] is entailed by[SEP] {sent1}.'
+        elif domain == 'qnli':
+            return f'It is [MASK] that the answer to {sent1}[SEP] is entailed by[SEP] {sent2}.'
+        elif domain == 'qqp':
+            return f'It is [MASK] that the answer to {sent1}[SEP] is entailed by[SEP] {sent2}.'
+        elif domain == 'rte':
+            return f'It is [MASK] that {sent1}[SEP] is entailed by[SEP] {sent2}.'
+        elif domain == 'mnli':
+            return f'It is [MASK] that {sent1}[SEP] is entailed by[SEP] {sent2}.'
+        elif domain == 'cola':
+            return f'It is [MASK] that the sentence {sent1}[SEP] is[SEP] fluent.'
+        else:
+            print(f'\nDomain {domain} is not supported in build_prompt_input()\n')
+            sys.exit()
+
+    def prompt_4(domain, sent1, sent2):
+        if domain == 'sst2':
+            # return f'It is [MASK] that the movie is good cannot be entailed by {sent1}.'
+            return f'It is [MASK] that I like the movie[SEP] cannot be entailed by[SEP] the comment {sent1}.'
+        elif domain == 'qnli':
+            return f'It is [MASK] that {sent1}[SEP] cannot be answered by[SEP] {sent2}.'
+        elif domain == 'qqp':
+            return f'It is [MASK] that {sent1} and {sent2}[SEP] cannot be[SEP] the same questions.'
+        elif domain == 'rte':
+            return f'It is [MASK] that {sent1} cannot be true[SEP] when[SEP] {sent2} is true.'
+        elif domain == 'mnli':
+            return f'It is [MASK] that {sent1} cannot be true[SEP] when[SEP] {sent2} is true.'
+        elif domain == 'cola':
+            return f'It is [MASK] that the grammar of {sent1}[SEP] cannot be[SEP] accept.'
         else:
             print(f'\nDomain {domain} is not supported in build_prompt_input()\n')
             sys.exit()
@@ -181,16 +221,93 @@ def build_prompt_input(domain, sent1_list, sent2_list, mlm=True):
         'rte': (0, 1), 'mnli': (0, 1), 'cola': (1, 0)
     }
 
-    prompt_list_1 = [prompt_1(domain, x, y) for x, y in zip(sent1_list, sent2_list)]
-    prompt_list_2 = [prompt_2(domain, x, y) for x, y in zip(sent1_list, sent2_list)]
-    # prompt_list_3 = [prompt_3(domain, x, y) for x, y in zip(sent1_list, sent2_list)]
-    # prompt_list_4 = [prompt_4(domain, x, y) for x, y in zip(sent1_list, sent2_list)]
+    if not sep:
+        prompt_list_1 = [prompt_1(domain, x, y) for x, y in zip(sent1_list, sent2_list)]
+        prompt_list_2 = [prompt_2(domain, x, y) for x, y in zip(sent1_list, sent2_list)]
+    else:
+        prompt_list_1 = [prompt_3(domain, x, y) for x, y in zip(sent1_list, sent2_list)]
+        prompt_list_2 = [prompt_4(domain, x, y) for x, y in zip(sent1_list, sent2_list)]
 
     prompt_list = prompt_list_1 + prompt_list_2 # + prompt_list_3 + prompt_list_4
     if not mlm:
         prefix_len = len('It is [MASK] that ')
         prompt_list = [x[prefix_len:] for x in prompt_list]
     return prompt_list, label_rvs_map[domain]
+
+
+def meta_entailment_prompt(
+        domain, sent1_list, sent2_list,
+        label_list, mlm = False, skip_self = True,
+        mode = 'all', sample_pool = None, sep = True
+    ):
+    
+    if sent2_list is None:
+        sent2_list = sent1_list
+    
+    prompt_list, rvs_map = build_prompt_input(
+        domain, sent1_list, sent2_list, mlm=mlm, sep=False
+    )
+
+    if rvs_map[1] == 0:
+        new_label_list = label_list + label_list
+    else:
+        new_label_list = label_list + [2 - x for x in label_list]
+    
+    meta_prompt_list = []
+    meta_label_list = []
+    pair_idx_list = []
+    
+    for i, pi in enumerate(prompt_list):
+        label_i = new_label_list[i]
+        
+        if mode == 'all':
+            for j, pj in enumerate(prompt_list):
+                if i == j and skip_self:
+                    continue
+                label_j = new_label_list[j]
+
+                if label_i == label_j:
+                    meta_label = 0
+                else:
+                    meta_label = 2
+                
+                if sep:
+                    meta_input_str = f'{pi}[SEP] meta supports[SEP] {pj}.'
+                else:
+                    meta_input_str = f'{pi} is entailed by {pj}.'
+        
+                meta_prompt_list.append(meta_input_str)
+                meta_label_list.append(meta_label)
+        
+        if mode == 'sample':
+            if sample_pool is not None and i not in sample_pool:
+                continue
+
+            if sample_pool is not None:
+                j = random.choice(list(sample_pool))
+            else:
+                j = random.randint(0, len(prompt_list) - 1)
+            
+            pj = prompt_list[j]
+            if i == j:
+                continue
+            label_j = new_label_list[j]
+
+            if label_i == label_j:
+                meta_label = 0
+            else:
+                meta_label = 2
+            
+            if sep:
+                meta_input_str = f'{pi}[SEP] meta supports[SEP] {pj}.'
+            else:
+                meta_input_str = f'{pi} is entailed by {pj}.'
+    
+            meta_prompt_list.append(meta_input_str)
+            meta_label_list.append(meta_label)
+            pair_idx_list.append((i, j))
+    
+    return meta_prompt_list, meta_label_list, pair_idx_list
 
 
 def shuffle_data(sent1_list, sent2_list, label_list):
@@ -212,7 +329,7 @@ def shuffle_data(sent1_list, sent2_list, label_list):
     }
 
 
-def contrast_shuffle_data(sent1_list, sent2_list, label_list):
+def contrast_shuffle_data(domain, sent1_list, sent2_list, label_list):
     if domain == 'sst2':
         batch_size = 32
     elif domain == 'mnli':
@@ -225,6 +342,7 @@ def contrast_shuffle_data(sent1_list, sent2_list, label_list):
         batch_size = 8
     else:
         batch_size = 32
+    
     data_size = len(sent1_list) // 2
     prompt_batch_size = batch_size // 2
     
@@ -234,7 +352,7 @@ def contrast_shuffle_data(sent1_list, sent2_list, label_list):
         data = list(zip(sent1_list, sent2_list, label_list))
     
     new_data_list = []
-    for i in range(0, data_size, batch_size):
+    for i in range(0, data_size, prompt_batch_size):
         p1_batch = data[i: i + prompt_batch_size]
         p2_batch = data[i + data_size: i + data_size + prompt_batch_size]
         new_data_list += p1_batch + p2_batch
@@ -254,7 +372,7 @@ def contrast_shuffle_data(sent1_list, sent2_list, label_list):
 
 
 def build_ft_data(
-        rvs_map, num_prompt_type, pseudo_label_list,
+        domain, rvs_map, num_prompt_type, pseudo_label_list,
         label_list, prompt_list, ft_mode, train_mode, train_size
     ):
     ft_labels = []
@@ -338,7 +456,7 @@ def build_ft_data(
     # '''
     '''
     new_data = contrast_shuffle_data(
-        new_data['sent1_list'], new_data['sent2_list'], new_data['label_list']
+        domain, new_data['sent1_list'], new_data['sent2_list'], new_data['label_list']
     )
     # '''
     
@@ -471,16 +589,63 @@ def load_cola(file_name):
     return sent1_list, None, label_list
 
 
+def empty_prompt(domain):
+    ep_dict = {
+        'qnli': [
+            'The question can be answered.',
+            'The question cannot be answered.'
+        ],
+        'qqp': [
+            'the answer to a question is entailed by another question.',
+            'the question cannot be answered by the answer to another question.'
+        ],
+        'rte': [
+            'the sentence is entailed by another sentence.',
+            'the sentence cannot be true when another sentence is true.'
+        ],
+        'sst2': [
+            'The movie is good is entailed by the comment.',
+            'the movie is bad is entailed by the comment.'
+        ]
+    }
+    return ep_dict[domain]
+
+
+def contrast_prompt(domain, sent1, sent2):
+    cp_dict = {
+        'qnli': [
+            f'{sent1} is entailed by the {sent1} can be answered.',
+            f'{sent2} is entailed by the {sent1} cannot be answered.'
+        ],
+        'qqp': [
+            f'the answer to {sent1} is entailed by {sent2}.',
+            f'{sent1} cannot be answered by the answer to {sent2}.'
+        ],
+        'rte': [
+            f'{sent1} is entailed by {sent2}.',
+            f'{sent1} cannot be true when {sent2} is true.'
+        ],
+        'sst2': [
+            f'The movie is good is entailed by {sent1}.',
+            f'the movie is bad is entailed by {sent1}.'
+        ]
+    }
+    return cp_dict[domain]
+
+
 if __name__ == '__main__':
     domain = sys.argv[1]
     split = sys.argv[2]
 
     if len(sys.argv) == 3:
         fs_rate = None
+    elif sys.argv[3] == 'none':
+        fs_rate = None
     else:
         fs_rate = int(sys.argv[3])
     
     exp_id = int(sys.argv[4])
+    save_split = sys.argv[5]
 
     train_domain_name = domain_dict[domain]
     split_size = 32
@@ -557,7 +722,7 @@ if __name__ == '__main__':
 
     if fs_rate is not None:
         json.dump(dataset, open(
-            f'data/glue_data/{train_domain_name}/{split}_proc_{exp_id}.json', 'w'
+            f'data/glue_data/{train_domain_name}/{save_split}_proc_{exp_id}.json', 'w'
         ))
     else:
         json.dump(dataset, open(

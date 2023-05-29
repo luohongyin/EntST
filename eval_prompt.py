@@ -2,6 +2,8 @@ import sys
 import json
 
 import random
+import argparse
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,7 +17,6 @@ from proc_data import coordinate, build_prompt_input
 from prompt_emb_layer import (
     PromptEmbedding,
     PromptDecoder,
-    TuringAdaptorSCModel
 )
 from eval_task_adp import (
     load_train_data, load_adv_eval, load_base_eval
@@ -140,35 +141,12 @@ def get_proto_emb(
 
 def get_unconf_nodes(
         hidden_states, pseudo_label_list, # pseudo_label_scores,
-        tok = None, model = None,
-        tok_path = None, model_path = None, k = 20, p = 0.5
+        k = 20, p = 0.5
     ):
 
-    if tok is None and model is None:
-        tok = AutoTokenizer.from_pretrained(
-            tok_path
-        )
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_path
-        ).cuda()
-    else:
-        model = model.cuda()
-
-    model = nn.DataParallel(model)
     data_size = len(pseudo_label_list)
 
-    model.eval()
-
-    # proto_emb, hidden_states = get_proto_emb(
-    #     tok, model, prompt_list, None, pseudo_label_list
-    # )
-    # cont_states = hidden_states[data_size:, :]
-    # hidden_states = hidden_states[:data_size, :]
-    # pc_dist = 1 / (1 + torch.norm(cont_states - hidden_states))
-    # pc_dict = 1 / (1 + torch.cdist(hidden_states, hidden_states))
-
     pseudo_label_list = torch.Tensor(pseudo_label_list).cuda()
-    # pseudo_label_scores = torch.Tensor(pseudo_label_scores).cuda()
 
     pseudo_label_scores = pseudo_label_list * p +\
          (1 - pseudo_label_list) * (1 - p)
@@ -196,7 +174,7 @@ def get_unconf_nodes(
 
     J = (topk_dist * label_mismatch_mat).sum(1, keepdim=True)
     # print(J.squeeze())
-    # abort()
+    # sys.exit()
     confidence = (J - mu) / torch.sqrt(sigma)
 
     conf_sq = confidence.squeeze(1)
@@ -271,7 +249,7 @@ def plabel_neighbor_agreement(
         tk_idx_list = sorted(tk_idx.tolist())
         # tk_idx_list = [x for x in range(len(prompt_batch))]
         # print(tk_idx)
-        # abort()
+        # sys.exit()
 
         prompt_batch = [prompt_batch[i] for i in tk_idx_list]
         prompt_con_batch = [prompt_con_batch[i] for i in tk_idx_list]
@@ -307,7 +285,7 @@ def plabel_neighbor_agreement(
 
         # print(true_logits.size())
         # print(hidden_states.size())
-        # abort()
+        # sys.exit()
         dist_list = 1 / (1 + torch.cdist(
             hidden_states[1:], hidden_states[:1]
         )).squeeze(1)
@@ -316,7 +294,7 @@ def plabel_neighbor_agreement(
         neighbor_mask = (dist_list > threh[-1]).float()
 
         # print(pred_labels)
-        # abort()
+        # sys.exit()
 
         label_diff = (pred_labels[1:] != pred_labels[0]).float()
         # label_diff = (label_diff / (1 + dist_list) / pred_logits).sum() / num_gen
@@ -387,7 +365,7 @@ def mlm_evaluate(
         offset = num_prompt
 
     # print(input_ids[0][offset + 3])
-    # abort()
+    # sys.exit()
 
     true_logits = result.logits[:, offset + 3, t_idx] - t_base
     false_logits = result.logits[:, offset + 3, f_idx] - f_base
@@ -399,7 +377,7 @@ def mlm_evaluate(
         return false_logits, true_logits #, ok_logits
     else:
         print('Rvs_flag not supported')
-        abort()
+        sys.exit()
 
 
 def cls_evaluate(
@@ -546,7 +524,7 @@ def add_prompt_layer(model, dataset_name, num_prompt, model_type_str):
         pass
     else:
         print(f'Model {model_type_str} not supported')
-        abort()
+        sys.exit()
     return model
 
 
@@ -616,7 +594,7 @@ def eval_prompt_seq_cls(
             # '''
 
             # print(score_board)
-            # abort()
+            # sys.exit()
             _, pred = score_board.max(1)
 
         _, pred = score_board.max(1)
@@ -626,7 +604,7 @@ def eval_prompt_seq_cls(
         print('')
         print(pred)
         print(label_batch)
-        abort()
+        sys.exit()
         # '''
 
     acc = num_crr / num_case
@@ -935,7 +913,7 @@ def prompt_cse_relabel(
             # _, pred = score_board.max(1)
             # print(score_board)
             # print(pred)
-            # abort()
+            # sys.exit()
 
         # _, pred = score_board.max(1)
         pred = (score_board[:, 0] > 0).int()
@@ -972,7 +950,7 @@ def evaluate_func(
         eval_func = proto_evaluate
     else:
         print(f'model_type {model_type} not supported')
-        abort()
+        sys.exit()
     loss_fn = nn.CrossEntropyLoss()
 
     t_idx = tok.convert_tokens_to_ids('true')
@@ -1024,7 +1002,7 @@ def evaluate_func(
         # ).cuda()
         proto_emb = torch.load(f'model_ft_file/{dataset_name}_proto_emb.pt').cuda()
     except:
-        # abort()
+        # sys.exit()
          #print('No self-trained checkpoint, using pretrained')
         proto_emb = None
         # proto_emb = torch.load(f'model_ft_file/{dataset_name}_proto_emb.pt')
@@ -1055,6 +1033,8 @@ def evaluate_func(
         ]
 
         if dataset_name == 'mnli':
+            score_board_0 = torch.zeros(cur_bs, 3).cuda()
+            score_board_1 = torch.zeros(cur_bs, 3).cuda()
             score_board = torch.zeros(cur_bs, 3).cuda()
         else:
             score_board_0 = torch.zeros(cur_bs, 2).cuda()
@@ -1064,7 +1044,7 @@ def evaluate_func(
         for j in range(0, num_prompt_type):
 
             if dataset_name == 'mnli':
-                false_scores, true_scores = eval_func(
+                false_scores, ok_scores, true_scores = eval_func(
                     tok, model, prompt_input_group[j], rvs_map[j],
                     t_idx = t_idx, f_idx = f_idx, ok_idx = ok_idx,
                     t_base = t_base, f_base = f_base, ok_base = ok_base,
@@ -1090,14 +1070,14 @@ def evaluate_func(
                 score_board_0[:, 0] += false_scores # - f_base
                 if dataset_name == 'mnli':
                     score_board_0[:, 2] += true_scores # - t_base
-                    # score_board_0[:, 1] += ok_scores
+                    score_board_0[:, 1] += ok_scores
                 else:
                     score_board_0[:, 1] += true_scores
             if j == 1:
                 score_board_1[:, 0] += false_scores # - f_base
                 if dataset_name == 'mnli':
                     score_board_1[:, 2] += true_scores # - t_base
-                    # score_board_1[:, 1] += ok_scores
+                    score_board_1[:, 1] += ok_scores
                 else:
                     score_board_1[:, 1] += true_scores
 
@@ -1151,40 +1131,60 @@ def evaluate_func(
 
 if __name__ == '__main__':
 
-    dataset_name = sys.argv[1]
-    model_mode = sys.argv[2]
-    eval_split = sys.argv[3]
+    parser = argparse.ArgumentParser(
+        prog='python eval_prompt.py',
+        description='Evaluation of self-trained classifiers with different prompts',
+        epilog='Submit issues on Github for addtional help.'
+    )
 
-    num_prompt_type = int(sys.argv[4])
-    num_prompt = int(sys.argv[5])
-    model_config = sys.argv[6]
-    exp_id = sys.argv[7]
-    model_type = sys.argv[8]
-    exp_log_name = sys.argv[9]
-    model_type_str = sys.argv[10]
+    # Task parameters
+    parser.add_argument('--domain', type=str)
+    parser.add_argument('--model-mode', type=str, default='mt')
+    parser.add_argument('--eval-split', type=str)
+    parser.add_argument('--num-prompt-type', type=int, default=2)
+    parser.add_argument('--num-prompt', type=int, default=50)
+
+    # Model parameters
+    parser.add_argument("--model-config", type=str, default="self_train")
+    parser.add_argument('--exp-id', type=str)
+    parser.add_argument('--model-type', type=str, help='If the model is a classifier or MLM.', default='sc')
+    parser.add_argument("--model-type-str", type=str, default="deberta")
+
+    args = parser.parse_args()
+
+    dataset_name = args.domain
+    model_mode = args.model_mode
+    eval_split = args.eval_split
+    num_prompt_type = args.num_prompt_type
+    num_prompt = args.num_prompt
+    model_config = args.model_config
+    exp_id = args.exp_id
+    model_type = args.model_type
+    model_type_str = args.model_type_str
 
     if model_config == 'pretrain':
-        model_path = 'model_ft_file/mnli_model_sc_3e-06_binary_pr.pt'
-        # model_path = 'model_ft_file/mnli_model_sc_3e-06_binary_pr.pt'
-        # model_path = 'model_ft_file/mnli_model_sc_5e-06_binary_pb.pt'
-        # model_path = 'model_ft_file/mnli_model_mlm_1e-05_binary_p1.pt'
-        # model_path = 'model_ft_file/mnli_model_sc_5e-06_single_p0.pt'
-        # model_path = 'model_ft_file/mnli_model_sc_3e-06_binary_pk24.pt'
-        # model_path = 'model_ft_file/mnli_model_sc_4e-06_binary_meta_ep19_maml-10-200.pt'
-        # model_path = 'model_ft_file/wiki_roberta_5e-06_binary_ep0.pt'
+        model_path = f'luohy/ESP-{model_type_str}-large'
     elif model_config == 'self_train':
         model_path = f'model_ft_file/cls_{dataset_name}_{model_type_str}_syn_data_relabel_{exp_id}.pt'
     elif model_config == 'adp_train':
         model_path = 'model_ft_file/mnli_model_sc_3e-06_binary_p1.pt'
         # model_path = 'model_ft_file/mnli_model_sc_3e-06_binary_pr.pt'
     else:
-        print(f'{model_config} not supported')
-        abort()
+        print(f'\n{model_config} not supported.\n')
+        sys.exit()
 
     # model_type_str = 'roberta'
+    if model_type_str == 'roberta':
+        tokenizer_path = 'roberta-large'
+    
+    elif model_type_str == 'deberta':
+        tokenizer_path = 'microsoft/deberta-large'
+    
+    else:
+        print(f'\nBackbone model {model_type_str} not supported.\n')
 
     tok = AutoTokenizer.from_pretrained(
-        f'model_file/{model_type_str}-large-tok.pt'
+        tokenizer_path
     )
 
     if model_type == 'mlm':
@@ -1197,13 +1197,6 @@ if __name__ == '__main__':
             model_path
         )
         eval_func = cls_evaluate
-        if model_config == 'adp_train':
-            model.add_adapter('adpst')
-            state_dict = torch.load(
-                f'model_ft_file/cls_{dataset_name}_adapter_syn_data_relabel_{exp_id}.pt'
-            )
-            model.load_state_dict(state_dict)
-            model.set_active_adapters('adpst')
 
     if model_mode == 'mt':
         prompt_str = None
@@ -1223,12 +1216,12 @@ if __name__ == '__main__':
         )
 
     else:
-        print(f'Model mode {model_mode} not supported.')
-        abort()
+        print(f'\nModel mode {model_mode} not supported.\n')
+        sys.exit()
 
     model.eval()
     model = model.cuda()
-    # model = nn.DataParallel(model)
+    model = nn.DataParallel(model)
 
     acc_0, acc_1, acc = evaluate_func(
         dataset_name, model_mode, eval_split, model_type,
@@ -1237,18 +1230,4 @@ if __name__ == '__main__':
         model_type_str = model_type_str
     )
 
-    print(f'Acc_p0 = {acc_0}, Acc_p1 = {acc_1}, Acc = {acc}')
-
-    try:
-        exp_log = json.load(open(
-            f'log/{dataset_name}/exp_{eval_split}_{exp_id}_{exp_log_name}.json'
-        ))
-        exp_log[0].append(acc_0)
-        exp_log[1].append(acc_1)
-        exp_log[2].append(acc)
-    except:
-        exp_log = [[acc_0], [acc_1], [acc]]
-
-    json.dump(exp_log, open(
-        f'log/{dataset_name}/exp_{eval_split}_{exp_id}_{exp_log_name}.json', 'w'
-    ))
+    print(f'\nAcc with suppotion 0 = {acc_0}, Acc with supposition 1 = {acc_1}, Acc_joint = {acc}\n')

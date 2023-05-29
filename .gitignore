@@ -1,0 +1,4 @@
+__pycache__/
+model_file/
+model_ft_file/
+data/

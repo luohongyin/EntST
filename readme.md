@@ -1,15 +1,51 @@
 # Entailment as Robust Self-learner
+The repo of paper [Entailment as Robust Self-learner](#) by Jiaxin Ge*, Hongyin Luo*, Yoon Kim, Jim Glass at ACL 2023 main conference.
 
 # Dependencies
-- Transformers 4.16.2
-- Pytorch 1.6.0
+- Transformers > 4.16.2
+- Pytorch > 1.6.0
 
-# Runing the pipieline
+# Preparing data
 ```
-./prompt_script.sh $DOMAIN $EVAL_MODEL $FT_MODE $EXP_ID
+bash prep.sh
 ```
-- Domain: qnli, qqp, rte, sst2, cola
-- FT_mode: ft (fine-tuning) or st (self-training)
+
+# Reproducing GLUE Experiments
+```
+bash prompt_script.sh
+```
+Parameters in `prompt_script.sh`
+- `domain`: qnli, qqp, rte, sst2
+- `ft_mode`: st (self-training)
+- `exp_id`: an `int` number flaging the experiment ID.
+- `train_size`: The number of a unit training set. The number of training case is `train_size x exp_id`.
+- `model_type_str`: Either `roberta` or `deberta`
+
+# Reproducing Multi-class Experiments
+```
+cd multi-class
+
+Train:
+python3 ag_news.py -—algo MODEL_NAME -—index 0 --type ST_METHOD
+python3 amazon_news.py -—algo MODEL_NAME -—index 0 --type ST_METHOD
+python3 emotion.py —-algo MODEL_NAME —-index 0 --type ST_METHOD
+python3 copa.py —-algo MODEL_NAME —-index 0 --type ST_METHOD
+
+Test:
+python3 test_agnews.py —-algo MODEL_NAME —-index 0
+python3 test_amazon.py —-algo MODEL_NAME —-index 0
+python3 test_copa.py —-algo MODEL_NAME —-index 0
+python3 test_emotion.py —-algo MODEL_NAME —-index 0
+
+—algo: which entailment model backbone to use [“deberta”, “roberta”]
+—index : appendix in the model path 
+—type: finetune algorithm [
+    "pseudo",       # Baseline self training
+    "confidence",   # Removing low-confidence cases
+    'dropout'       # Simple dropout-based voting
+    'unconf',       # Full SimPLE algorithm
+]
+```
 
 # Files included
 - `pretrain_enty.py`: Entailment pretraining on MNLI
