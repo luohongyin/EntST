@@ -2,8 +2,8 @@
 The repo of paper [Entailment as Robust Self-learner](#) by Jiaxin Ge*, Hongyin Luo*, Yoon Kim, Jim Glass at ACL 2023 main conference.
 
 # Dependencies
-- Transformers > 4.16.2
-- Pytorch > 1.6.0
+- Transformers >= 4.16.2
+- Pytorch >= 1.6.0
 
 # Preparing data
 ```
