@@ -21,6 +21,8 @@ Parameters in `prompt_script.sh`
 - `train_size`: The number of a unit training set. The number of training case is `train_size x exp_id`.
 - `model_type_str`: Either `roberta` or `deberta`
 
+The `prompt_script.sh` file describes the entire process, and it runs multiple independent experiments. We also added `Slurm` flags so it can be submitted to slurm as a single job or a job array.
+
 # Reproducing Multi-class Experiments
 ```
 cd multi-class

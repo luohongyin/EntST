@@ -3,7 +3,7 @@
 #SBATCH -o log/qqp/prompt_slurm_%j_%a.log
 #SBATCH --array=0-7
 #SBATCH --exclusive
-#SBATCH --gres=gpu:volta:2
+#SBATCH --gres=gpu:2
 
 set -e
 
