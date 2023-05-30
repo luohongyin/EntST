@@ -1,5 +1,5 @@
 # Entailment as Robust Self-learner
-The repo of paper [Entailment as Robust Self-learner](#) by Jiaxin Ge*, Hongyin Luo*, Yoon Kim, Jim Glass at ACL 2023 main conference.
+The repo of paper [Entailment as Robust Self-learner](https://arxiv.org/pdf/2305.17197.pdf) by Jiaxin Ge*, Hongyin Luo*, Yoon Kim, Jim Glass at ACL 2023 main conference.
 
 # Dependencies
 - Transformers >= 4.16.2
@@ -28,16 +28,16 @@ The `prompt_script.sh` file describes the entire process, and it runs multiple i
 cd multi-class
 
 Train:
-python3 ag_news.py -—algo MODEL_NAME -—index 0 --type ST_METHOD
-python3 amazon_news.py -—algo MODEL_NAME -—index 0 --type ST_METHOD
-python3 emotion.py —-algo MODEL_NAME —-index 0 --type ST_METHOD
-python3 copa.py —-algo MODEL_NAME —-index 0 --type ST_METHOD
+python3 ag_news.py --algo MODEL_NAME --index 0 --type ST_METHOD
+python3 amazon_news.py --algo MODEL_NAME --index 0 --type ST_METHOD
+python3 emotion.py --algo MODEL_NAME --index 0 --type ST_METHOD
+python3 copa.py --algo MODEL_NAME --index 0 --type ST_METHOD
 
 Test:
-python3 test_agnews.py —-algo MODEL_NAME —-index 0
-python3 test_amazon.py —-algo MODEL_NAME —-index 0
-python3 test_copa.py —-algo MODEL_NAME —-index 0
-python3 test_emotion.py —-algo MODEL_NAME —-index 0
+python3 test_agnews.py --algo MODEL_NAME --index 0
+python3 test_amazon.py --algo MODEL_NAME --index 0
+python3 test_copa.py --algo MODEL_NAME --index 0
+python3 test_emotion.py --algo MODEL_NAME --index 0
 
 —algo: which entailment model backbone to use [“deberta”, “roberta”]
 —index : appendix in the model path 
